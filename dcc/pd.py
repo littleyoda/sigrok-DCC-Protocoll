@@ -78,8 +78,11 @@ class Decoder(srd.Decoder):
         ('bits', 'Bits', (0,)),
         ('data', 'Decoded', (1,)),
     )
-  
-
+    options = (
+        {'id': 'Phase', 'desc': '01 or 10',
+            'default': '01', 'values': ('01', '10')},
+    )
+ 
     def putx(self, data):
         self.put(self.ss_edge, self.samplenum, self.out_ann, data)
 
@@ -230,6 +233,11 @@ class Decoder(srd.Decoder):
     def decode(self, ss, es, data):
         if self.samplerate is None:
             raise Exception("Cannot decode without samplerate.")
+        if self.options['Phase'] == '01':
+            bit = 0
+        else:
+            bit = 1           
+ 
         for (self.samplenum, pins) in data:
 
             data = pins[0]
@@ -244,7 +252,7 @@ class Decoder(srd.Decoder):
                 self.lastfall = self.samplenum
                 continue
 
-            if data == 0:
+            if data == bit:
                 diff = (self.samplenum - self.lastfall)/self.samplerate * 1000000;
                 if diff > (103 - 5) and diff < (129):
                     value = "1"
