@@ -89,9 +89,11 @@ class Decoder(srd.Decoder):
     def __init__(self, **kwargs):
         self.olddata = None
         self.lastfall = None
+        self.lastraise = None
         self.ss_edge = None
         self.first_transition = True
         self.bitwidth = None
+        self.tolerance = 0.2
 
     def start(self):
         self.out_ann = self.register(srd.OUTPUT_ANN)
@@ -104,59 +106,96 @@ class Decoder(srd.Decoder):
         if (len(d) < 2):
           return;        
         l = len(d);
+
         idx = 0
-        self.put(d[idx][1][0], d[idx][1][8], self.out_ann, [1, ["Addr:" + str(d[idx][0])]])
+        id = d[idx][0]
+        if (id == 0):
+            # Bordcast
+            self.put(d[idx][1][0], d[idx][1][8], self.out_ann, [1, ["Broadcast"]])
+        elif (id >= 1 and id <=111):
+            # Loco Decoder
+            self.put(d[idx][1][0], d[idx][1][8], self.out_ann, [1, ["LocoAddr:" + str(d[idx][0])]])
         
-        idx += 1
-        cmd = d[idx][0] >> 5
-        subcmd = d[idx][0] & 31
-        self.put(d[idx][1][0], d[idx][1][3], self.out_ann, [1, [self.dccCmds[cmd]]])
-        
-        if (cmd == 1): ## Advanced Operations Instruction 001
-          self.put(d[idx][1][3], d[idx][1][8], self.out_ann, [1, ["Adv. Operations Inst."]])
-          if (subcmd == 31 and len(d) > 2):
-            idx += 1                
-            self.put(d[idx][1][0], d[idx][1][1], self.out_ann, [1, ["D"]])
-            self.put(d[idx][1][1], d[idx][1][8], self.out_ann, [1, ["Speed:" + str(d[idx][0] & 127)]])
-
-        elif (cmd == 4): ## Function Group One
-          value = subcmd
-          f = [ "F1", "F2", "F3", "F4", "F0" ]
-          out = ""
-          for i in range(0,len(f)):
-            out = out + "F" + f[i] + ":" + str(value & 1) + " "
-            value = value >> 1 
-          self.put(d[idx][1][3], d[idx][1][8], self.out_ann, [1,[out]])
-
-        elif (cmd == 5): ## Function Group Two
-          value = subcmd
-          f = 9;
-          if (value & 16 == 16):
-            f = 5;
-          out = ""
-          for i in range(0,5):
-            out = out + "F" + str(f) + ":" + str(value & 1) + " "
-            value = value >> 1 
-            f += 1
-          self.put(d[idx][1][3], d[idx][1][8], self.out_ann, [1,[out]])
-            
-        elif (cmd == 6): ## Futre Expansion Instruction 110
-          self.put(d[idx][1][3], d[idx][1][8], self.out_ann, [1, ["Sub:" + self.subCmd[subcmd]]])
-
-          if (subcmd in [30, 31]): #F13 - 20  // F21 to F28
             idx += 1
-            value = d[idx][0]
-            out = "";
-            f = 0
-            if (subcmd == 30):
-                f = 13
-            if (subcmd == 31):
-                f = 21
-            for x in range(0,8):
-              out = out + "F" + str(f + x) + ":" + str(value & 1) + " " 
-              value = value >> 1
-              self.put(d[idx][1][0], d[idx][1][8], self.out_ann, [1, [out]])
+            cmd = d[idx][0] >> 5
+            subcmd = d[idx][0] & 31
+            self.put(d[idx][1][0], d[idx][1][3], self.out_ann, [1, [self.dccCmds[cmd]]])
+            
+            if (cmd == 1): ## Advanced Operations Instruction 001
+              self.put(d[idx][1][3], d[idx][1][8], self.out_ann, [1, ["Adv. Operations Inst."]])
+              if (subcmd == 31 and len(d) > 2):
+                idx += 1                
+                self.put(d[idx][1][0], d[idx][1][1], self.out_ann, [1, ["D"]])
+                self.put(d[idx][1][1], d[idx][1][8], self.out_ann, [1, ["Speed:" + str(d[idx][0] & 127)]])
 
+            elif (cmd == 4): ## Function Group One
+              value = subcmd
+              f = [ "F1", "F2", "F3", "F4", "F0" ]
+              out = ""
+              for i in range(0,len(f)):
+                out = out + "F" + f[i] + ":" + str(value & 1) + " "
+                value = value >> 1 
+              self.put(d[idx][1][3], d[idx][1][8], self.out_ann, [1,[out]])
+
+            elif (cmd == 5): ## Function Group Two
+              value = subcmd
+              f = 9;
+              if (value & 16 == 16):
+                f = 5;
+              out = ""
+              for i in range(0,5):
+                out = out + "F" + str(f) + ":" + str(value & 1) + " "
+                value = value >> 1 
+                f += 1
+              self.put(d[idx][1][3], d[idx][1][8], self.out_ann, [1,[out]])
+                
+            elif (cmd == 6): ## Futre Expansion Instruction 110
+              self.put(d[idx][1][3], d[idx][1][8], self.out_ann, [1, ["Sub:" + self.subCmd[subcmd]]])
+
+              if (subcmd in [30, 31]): #F13 - 20  // F21 to F28
+                idx += 1
+                value = d[idx][0]
+                out = "";
+                f = 0
+                if (subcmd == 30):
+                    f = 13
+                if (subcmd == 31):
+                    f = 21
+                for x in range(0,8):
+                  out = out + "F" + str(f + x) + ":" + str(value & 1) + " " 
+                  value = value >> 1
+                  self.put(d[idx][1][0], d[idx][1][8], self.out_ann, [1, [out]])
+        elif (id >= 112 and id <=127):
+            self.put(d[idx][1][0], d[idx][1][8], self.out_ann, [1, ["Service Mode"]])
+        elif (id >= 128 and id <=191):
+            # Accessory
+            if (d[idx + 1][0] & 128 == 0):
+                self.put(d[idx][1][0], d[idx][1][8], self.out_ann, [1, ["Accessory (Extended)"]])
+            else:
+                # 10AAAAAA 0 1AAACDDD
+                A1 = d[idx][0] & 63 
+                A2 = ~((d[idx + 1][0] >> 4) & 7) & 7 
+                A3 = d[idx + 1][0] & 7 
+                #A1 6 bits
+                #A2 3 bits
+                #A3 3 bits
+                addr = (A3 >> 1) + (A2 <<8) + (A1 <<2) + 1 # ADDR =0 does not exists
+                subaddr = A3 & 1
+                if ((d[idx + 1][0] >> 3) & 1 == 0):
+                    C="off"
+                else:
+                    C="on"
+                self.put(d[idx][1][0], d[idx + 1][1][8], self.out_ann, [1, ["Accessory " + str(addr) +  ":" + str(subaddr) + " " +  str(C)]])
+                idx += 1
+        elif (id >= 192 and id <=231):
+            self.put(d[idx][1][0], d[idx][1][8], self.out_ann, [1, ["LocoAddr Long"]])
+        elif (id >= 232 and id <=254):
+            self.put(d[idx][1][0], d[idx][1][8], self.out_ann, [1, ["Reserved"]])
+        elif (id == 255):
+            self.put(d[idx][1][0], d[idx][1][8], self.out_ann, [1, ["IDLE"]])
+            idx += 1
+            if (d[idx][0] == 0): 
+                self.put(d[idx][1][0], d[idx][1][8], self.out_ann, [1, ["IDLE"]])
             
         # Checksum
         if ((idx + 1) < l):
@@ -237,7 +276,9 @@ class Decoder(srd.Decoder):
             bit = 0
         else:
             bit = 1           
- 
+        toleranceL = (1-self.tolerance)
+        toleranceU = (1+self.tolerance)
+        print("Sampling Intervall: " + str(1/self.samplerate * 1000000));
         for (self.samplenum, pins) in data:
 
             data = pins[0]
@@ -250,17 +291,23 @@ class Decoder(srd.Decoder):
             if self.olddata == None:
                 self.olddata = data
                 self.lastfall = self.samplenum
+                self.lastraise = self.samplenum
                 continue
 
             if data == bit:
-                diff = (self.samplenum - self.lastfall)/self.samplerate * 1000000;
-                if diff > (103 - 5) and diff < (129):
+                time = (self.samplenum - self.lastfall)/self.samplerate * 1000000;
+                part1 = (self.lastraise - self.lastfall)/self.samplerate * 1000000;
+                part2 = (self.samplenum - self.lastraise)/self.samplerate * 1000000;
+                
+                if ( ((52 * toleranceL) <= part1 <= (64 + toleranceU)) and abs(part1 - part2) <= (30)):
                     value = "1"
-                elif   diff > (179) and diff < (243):
+                elif ( ((90 * toleranceL) <= part1 <= (142 * toleranceU)) and abs(part1 - part2) <= (30)):
                     value = "0"
                 else:
-                    value = " (" + str(diff) + ")"
+                    value = " (" + str(time) + "/" + str(part1) + "/" + str(part2) +")"
                 self.put(self.lastfall, self.samplenum, self.out_ann, [0, [value]])
                 self.collectDataBytes(self.lastfall, self.samplenum, value)
                 self.lastfall = self.samplenum
+            else:
+                self.lastraise = self.samplenum
             self.olddata = data
