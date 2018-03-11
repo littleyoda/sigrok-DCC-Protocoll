@@ -59,7 +59,7 @@ class Decoder(srd.Decoder):
     dccValue = 0;
     decodedBytes = [];
     
-    api_version = 2
+    api_version = 3
     id = 'dcc'
     name = 'DCC'
     longname = 'Digital Command Control (DCC)'
@@ -87,12 +87,6 @@ class Decoder(srd.Decoder):
         self.put(self.ss_edge, self.samplenum, self.out_ann, data)
 
     def __init__(self, **kwargs):
-        self.olddata = None
-        self.lastfall = None
-        self.lastraise = None
-        self.ss_edge = None
-        self.first_transition = True
-        self.bitwidth = None
         self.tolerance = 0.2
 
     def start(self):
@@ -133,7 +127,7 @@ class Decoder(srd.Decoder):
               f = [ "F1", "F2", "F3", "F4", "F0" ]
               out = ""
               for i in range(0,len(f)):
-                out = out + "F" + f[i] + ":" + str(value & 1) + " "
+                out = out + f[i] + ":" + str(value & 1) + " "
                 value = value >> 1 
               self.put(d[idx][1][3], d[idx][1][8], self.out_ann, [1,[out]])
 
@@ -244,6 +238,7 @@ class Decoder(srd.Decoder):
                       self.setNextStatus(DCC.ADDRESSDATABYTE)
                   else:
                       self.setNextStatus(DCC.WAITINGFORPREAMBLE)
+
           # Collection 8 databits and one bit indicating the end of data
           elif self.dccStatus == DCC.ADDRESSDATABYTE:   
                   if (self.dccCounter == 0):
@@ -266,48 +261,39 @@ class Decoder(srd.Decoder):
                           self.dccCounter = 0;
                           self.dccValue = 0;
           else:
-              print("Unhandelt Status " + str(self.dccStatus))                              
+              print("Unhandeld Status " + str(self.dccStatus))                              
 
             
-    def decode(self, ss, es, data):
+    def decode(self):
         if self.samplerate is None:
             raise Exception("Cannot decode without samplerate.")
         if self.options['Phase'] == '01':
-            bit = 0
+            cond1 = 'r'
+            cond2 = 'f'
         else:
-            bit = 1           
+            cond1 = 'f'
+            cond2 = 'r'
         toleranceL = (1-self.tolerance)
         toleranceU = (1+self.tolerance)
+        self.wait({0: cond1})
+        self.first = self.samplenum
         print("Sampling Intervall: " + str(1/self.samplerate * 1000000));
-        for (self.samplenum, pins) in data:
-
-            data = pins[0]
-
-            # Wait for any transition on the data line.
-            if data == self.olddata:
-                continue
-
-            # Initialize first self.olddata with the first sample value.
-            if self.olddata == None:
-                self.olddata = data
-                self.lastfall = self.samplenum
-                self.lastraise = self.samplenum
-                continue
-
-            if data == bit:
-                time = (self.samplenum - self.lastfall)/self.samplerate * 1000000;
-                part1 = (self.lastraise - self.lastfall)/self.samplerate * 1000000;
-                part2 = (self.samplenum - self.lastraise)/self.samplerate * 1000000;
-                
-                if ( ((52 * toleranceL) <= part1 <= (64 + toleranceU)) and abs(part1 - part2) <= (30)):
-                    value = "1"
-                elif ( ((90 * toleranceL) <= part1 <= (142 * toleranceU)) and abs(part1 - part2) <= (30)):
-                    value = "0"
-                else:
-                    value = " (" + str(time) + "/" + str(part1) + "/" + str(part2) +")"
-                self.put(self.lastfall, self.samplenum, self.out_ann, [0, [value]])
-                self.collectDataBytes(self.lastfall, self.samplenum, value)
-                self.lastfall = self.samplenum
+        while True:
+            self.wait({0: cond2})
+            self.change = self.samplenum
+            self.wait({0: cond1})
+            self.last = self.samplenum
+            
+            time = (self.last - self.first)/self.samplerate * 1000000;
+            part1 = (self.change - self.first)/self.samplerate * 1000000;
+            part2 = (self.last - self.change)/self.samplerate * 1000000;
+        
+            if ( ((52 * toleranceL) <= part1 <= (64 + toleranceU)) and abs(part1 - part2) <= (30)):
+                value = "1"
+            elif ( ((90 * toleranceL) <= part1 <= (142 * toleranceU)) and abs(part1 - part2) <= (30)):
+                value = "0"
             else:
-                self.lastraise = self.samplenum
-            self.olddata = data
+                value = " (" + str(time) + "/" + str(part1) + "/" + str(part2) +")"
+            self.put(self.first, self.last, self.out_ann, [0, [value]])
+            self.collectDataBytes(self.first, self.last, value)
+            self.first = self.last
