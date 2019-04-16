@@ -1,7 +1,7 @@
 ##
 ## This file is part of the libsigrokdecode project.
 ##
-## Copyright (C) 2013 Sven Bursch-Osewold
+## Copyright (C) 2017-2018 Sven Bursch-Osewold
 ##
 ## This program is free software; you can redistribute it and/or modify
 ## it under the terms of the GNU General Public License as published by
@@ -67,6 +67,7 @@ class Decoder(srd.Decoder):
     license = 'gplv2+'
     inputs = ['logic']
     outputs = ['dcc']
+    tags = ['Encoding']
     channels = (
         {'id': 'data', 'name': 'Data', 'desc': 'Data line'},
     )
@@ -82,7 +83,9 @@ class Decoder(srd.Decoder):
         {'id': 'Phase', 'desc': '01 or 10',
             'default': '01', 'values': ('01', '10')},
     )
- 
+    def reset(self):
+         self.setNextStatus(DCC.WAITINGFORPREAMBLE)
+        
     def putx(self, data):
         self.put(self.ss_edge, self.samplenum, self.out_ann, data)
 
@@ -288,7 +291,7 @@ class Decoder(srd.Decoder):
             part1 = (self.change - self.first)/self.samplerate * 1000000;
             part2 = (self.last - self.change)/self.samplerate * 1000000;
         
-            if ( ((52 * toleranceL) <= part1 <= (64 + toleranceU)) and abs(part1 - part2) <= (30)):
+            if ( ((52 * toleranceL) <= part1 <= (64 * toleranceU)) and abs(part1 - part2) <= (30)):
                 value = "1"
             elif ( ((90 * toleranceL) <= part1 <= (142 * toleranceU)) and abs(part1 - part2) <= (30)):
                 value = "0"
