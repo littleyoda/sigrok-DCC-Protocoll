@@ -172,17 +172,20 @@ class Decoder(srd.Decoder):
                 # 10AAAAAA 0 1AAACDDD
                 A1 = d[idx][0] & 63 
                 A2 = ~((d[idx + 1][0] >> 4) & 7) & 7 
-                A3 = d[idx + 1][0] & 7 
+                A3 = (d[idx + 1][0] & 6) >> 1 # get bits 1-2 of bit two (port address)
+                A4 = d[idx + 1][0] & 1 # get bit 0 of second byte for main way to get on/off closed/thrown
                 #A1 6 bits
                 #A2 3 bits
                 #A3 3 bits
-                addr = (A3 >> 1) + (A2 <<8) + (A1 <<2) + 1 # ADDR =0 does not exists
-                subaddr = A3 & 1
-                if ((d[idx + 1][0] >> 3) & 1 == 0):
+                #A4 1 bit
+                addr = (A2 <<6) + A1
+                subaddr = A3
+                linearaddr = (((addr - 1) << 2) | subaddr) + 1 # addresses start with 1 not 0
+                if ((d[idx + 1][0] >> 3) & 1 == 0): # get C bit for activate/deactivate and report it
                     C="off"
                 else:
                     C="on"
-                self.put(d[idx][1][0], d[idx + 1][1][8], self.out_ann, [1, ["Accessory " + str(addr) +  ":" + str(subaddr) + " " +  str(C)]])
+                self.put(d[idx][1][0], d[idx + 1][1][8], self.out_ann, [1, ["Accessory " + str(linearaddr) + " / " + str(addr) +  "," + str(subaddr) + "," + str(A4) + " " +  str(C)]])
                 idx += 1
         elif (id >= 192 and id <=231):
             self.put(d[idx][1][0], d[idx][1][8], self.out_ann, [1, ["LocoAddr Long"]])
