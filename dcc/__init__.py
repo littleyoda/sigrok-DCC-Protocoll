@@ -1,7 +1,8 @@
 ##
 ## This file is part of the libsigrokdecode project.
 ##
-## Copyright (C) 2013 Sven Bursch-Osewold
+## Copyright (C) 2013-2020 Sven Bursch-Osewold
+##               2020      Roland Noell  
 ##
 ## This program is free software; you can redistribute it and/or modify
 ## it under the terms of the GNU General Public License as published by
@@ -19,13 +20,30 @@
 ##
 
 '''
-A Decoder for DCC-Signals.
+A decoder for DCC-Signals (operate model railways digitally):
+- Decoding of individual packets
+- Search functions for
+-- accessory address
+-- decoder address
+-- CV
+-- single byte ('and' linked if address or CV filled)
+- 'ignore pulse <= 4 µs':
+   Short pulses are ignored
+   (what would the signal look like without the short pulse?)
+- No decoding of packet sequences (e.g. programming mode)
+- No evaluation of the preamble length for packet detection
+- Rudimentary decoding of register and page mode packets
+- RailComPlus® system commands not decoded (as not documented)
 
-Currently only a subset of the commands is implemented.
+Used norms:
+RCN 210, 211, 212, 213, 214, 216, 217
+(NMRA S-9.2, S-9.2.1, S-9.2.3, S-9.3.2)
+http://www.vhdm.de
+https://www.nmra.org
 
-https://www.nmra.org/sites/default/files/s-92-2004-07.pdf
-https://www.nmra.org/sites/default/files/s-9.2.1_2012_07.pdf
+RailCom®(Lenz Elektronik GmbH,Gießen)
+RailComPlus®(Lenz Elektronik GmbH,Gießen, ESU electronic solutions,Ulm)
 '''
 
-from .pd import *
+from .pd import Decoder
 
